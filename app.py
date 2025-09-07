@@ -336,9 +336,10 @@ def OpenAI_Compatible():
 					# 累积实际生成的内容
 					if "content" in delta:
 						completion_str += delta["content"]
+						completion_tokens = utils.response.count(completion_str) # 计算 tokens
 					if "reasoning_content" in delta:
 						completion_str += delta["reasoning_content"]
-					completion_tokens = utils.response.count(completion_str) # 计算 tokens
+						completion_tokens = utils.response.count(completion_str) # 计算 tokens
 				else:
 					continue
 
@@ -607,6 +608,7 @@ def Anthropic_Compatible():
 		def stream():
 			completion_str = ""
 
+			yield "event: message_start\n"
 			yield f"data: {json.dumps({
 				"type": "message_start",
 				"message": {
@@ -623,6 +625,7 @@ def Anthropic_Compatible():
 					}
 				}
 			})}\n\n"
+			yield "event: content_block_start\n"
 			yield f"data: {json.dumps({
 				"type": "content_block_start",
 				"index": 0,
@@ -631,24 +634,65 @@ def Anthropic_Compatible():
 					"text": ""
 				}
 			})}\n\n"
-			# yield f"data: {json.dumps({"type": "ping"})}\n\n"
+			yield "event: ping\n"
+			yield f"data: {json.dumps({"type": "ping"})}\n\n"
+			temp = {"tool_call": []}
 			# 处理流式响应数据
 			for data in utils.response.parse(response):
 				if data.get("data", {}).get("done"): break
-				phase = data.get("phase", "other")
 				delta = utils.response.format(data, "Anthropic")
 
 				if delta:
+					if "tool_call" in delta:
+						temp["tool_call"].append(delta["tool_call"])
+						# 尝试合并并解析，看是否构成完整 JSON
+						tool_call_str = "".join(temp["tool_call"])
+						try:
+							tool_json = json.loads(tool_call_str)
+							
+							if "arguments" in tool_json:
+								try:
+									# 尝试将 arguments 解析为 JSON
+									parsed_arguments = json.loads(tool_json["arguments"])
+									# 替换为 input 字段并删除 arguments
+									tool_json["input"] = parsed_arguments
+									del tool_json["arguments"]
+								except (json.JSONDecodeError, TypeError):
+									# 如果解析失败，保留原始 arguments
+									log.warning("arguments 无法解析为 JSON，保留原值: %s", tool_json["arguments"])
+
+							log.debug("完整！调用！：%s", tool_json)
+							yield "event: content_block_start\n"
+							yield f"data: {json.dumps({
+								"type": "content_block_start",
+								"index": 0,
+								"content_block": {
+									"type": "tool_use",
+									**tool_json
+								}
+							})}\n\n"
+							break
+						except json.JSONDecodeError:
+							# JSON 不完整，继续收集
+							continue
+						except Exception as e:
+							log.error(f"Tool call parse error: {e}")
+							# 解析出其他错误，也应中断，避免 fallback
+							return utils.request.response(make_response("Invalid tool call format", 500))
+					yield "event: content_block_delta\n"
 					yield f"data: {json.dumps({"type": "content_block_delta", "index": 0, "delta": delta})}\n\n"
 
 					# 累积实际生成的内容
-					if "text" in delta: completion_str += delta["text"]
-					completion_tokens = utils.response.count(completion_str) # 计算 tokens
+					if "text" in delta:
+						completion_str += delta["text"]
+						completion_tokens = utils.response.count(completion_str) # 计算 tokens
 				else:
 					continue
 
+			yield "event: content_block_stop\n"
 			yield f"data: {json.dumps({"type": "content_block_stop", "index": 0})}\n\n"
 			# 发送 usage 统计信息
+			yield "event: message_delta\n"
 			yield f"data: {json.dumps({
 				"type": "message_delta",
 				"delta": {
@@ -659,6 +703,7 @@ def Anthropic_Compatible():
 					"output_tokens": completion_tokens
 				}
 			})}\n\n"
+			yield "event: message_stop\n"
 			yield f"data: {json.dumps({"type": "message_stop"})}\n\n"
 			# 发送 [DONE] 标志，表示流结束
 			yield "data: [DONE]\n\n"
