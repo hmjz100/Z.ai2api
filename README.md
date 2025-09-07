@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> 您正在查看的是 Canary 分支，此分支包含众多 Bug，建议谨慎使用。
+
 <div align=center>
 <img width="100" src="https://wsrv.nl/?url=https%3a%2f%2fz-cdn.chatglm.cn%2fz-ai%2fstatic%2flogo.svg&w=300&output=webp" />
 <h1>Z.ai2api</h1>
