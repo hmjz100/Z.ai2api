@@ -1,7 +1,7 @@
 ﻿# -*- coding: utf-8 -*-
 """
 Z.ai 2 API
-将 Z.ai 代理为 OpenAI Compatible 格式，支持免令牌、智能处理思考链、图片上传（仅登录后）等功能
+将 Z.ai 代理为 OpenAI/Anthropic Compatible 格式，支持免令牌、智能处理思考链、图片上传（仅登录后）等功能
 基于 https://github.com/kbykb/OpenAI-Compatible-API-Proxy-for-Z 使用 AI 辅助重构。
 """
 
@@ -29,10 +29,10 @@ import tiktoken
 enc = tiktoken.get_encoding("cl100k_base")
 
 BROWSER_HEADERS = {
-	"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+	"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0",
 	"Accept": "*/*",
 	"Accept-Language": "zh-CN,zh;q=0.9",
-	"X-FE-Version": "prod-fe-1.0.76",
+	"X-FE-Version": "prod-fe-1.0.88",
 	"sec-ch-ua": '"Not;A=Brand";v="99", "Edge";v="139"',
 	"sec-ch-ua-mobile": "?0",
 	"sec-ch-ua-platform": '"Windows"',
@@ -58,7 +58,8 @@ class utils:
 		@staticmethod
 		def chat(data, chat_id):
 			log.debug("收到请求: %s", json.dumps(data))
-			return requests.post(f"{BASE}/api/chat/completions", json=data, headers={**BROWSER_HEADERS, "Authorization": f"Bearer {utils.request.token()}", "Referer": f"{BASE}/c/{chat_id}"}, stream=True, timeout=60)
+			token = utils.request.token()
+			return requests.post(f"{BASE}/api/chat/completions?timestamp={int(datetime.now().timestamp())}&platform=web", json=data, headers={**BROWSER_HEADERS, "Authorization": f"Bearer {token}", "Referer": f"{BASE}/c/{chat_id}"}, stream=True, timeout=60)
 		@staticmethod
 		def image(data_url, chat_id):
 			try:
@@ -312,6 +313,7 @@ def OpenAI_Compatible():
 	if stream:
 		def stream():
 			completion_str = ""
+			completion_tokens = 0
 
 			# 处理流式响应数据
 			for data in utils.response.parse(response):
@@ -637,10 +639,12 @@ def Anthropic_Compatible():
 			yield "event: ping\n"
 			yield f"data: {json.dumps({"type": "ping"})}\n\n"
 			temp = {"tool_call": []}
+			completion_tokens = 0
 			# 处理流式响应数据
 			for data in utils.response.parse(response):
 				if data.get("data", {}).get("done"): break
 				delta = utils.response.format(data, "Anthropic")
+				call_stoped = False
 
 				if delta:
 					if "tool_call" in delta:
@@ -649,28 +653,48 @@ def Anthropic_Compatible():
 						tool_call_str = "".join(temp["tool_call"])
 						try:
 							tool_json = json.loads(tool_call_str)
-							
+							tool_imput = {}
+
+							if "input" in tool_json:
+								tool_imput = tool_json["input"]
+								tool_json["input"] = {}
+
 							if "arguments" in tool_json:
 								try:
-									# 尝试将 arguments 解析为 JSON
-									parsed_arguments = json.loads(tool_json["arguments"])
-									# 替换为 input 字段并删除 arguments
-									tool_json["input"] = parsed_arguments
-									del tool_json["arguments"]
+									tool_imput = json.dumps(json.loads(tool_json["arguments"]))
 								except (json.JSONDecodeError, TypeError):
-									# 如果解析失败，保留原始 arguments
-									log.warning("arguments 无法解析为 JSON，保留原值: %s", tool_json["arguments"])
+									log.warning("arguments 无法解析为 JSON，原值: %s", tool_json["arguments"])
+								del tool_json["arguments"]
 
 							log.debug("完整！调用！：%s", tool_json)
+							call_stoped = True
+
+							yield "event: content_block_stop\n"
+							yield f"data: {json.dumps({"type": "content_block_stop", "index": 0})}\n\n"
+
 							yield "event: content_block_start\n"
 							yield f"data: {json.dumps({
 								"type": "content_block_start",
-								"index": 0,
+								"index": 1,
 								"content_block": {
 									"type": "tool_use",
 									**tool_json
 								}
 							})}\n\n"
+
+							yield "event: content_block_delta\n"
+							yield f"data: {json.dumps({
+								"type": "content_block_delta",
+								"index": 1,
+								"delta": {
+									"type": "input_json_delta",
+									"partial_json": tool_imput
+								}
+							})}\n\n"
+
+							yield "event: content_block_stop\n"
+							yield f"data: {json.dumps({"type": "content_block_stop", "index": 1})}\n\n"
+
 							break
 						except json.JSONDecodeError:
 							# JSON 不完整，继续收集
@@ -679,8 +703,9 @@ def Anthropic_Compatible():
 							log.error(f"Tool call parse error: {e}")
 							# 解析出其他错误，也应中断，避免 fallback
 							return utils.request.response(make_response("Invalid tool call format", 500))
-					yield "event: content_block_delta\n"
-					yield f"data: {json.dumps({"type": "content_block_delta", "index": 0, "delta": delta})}\n\n"
+					if not call_stoped: 
+						yield "event: content_block_delta\n"
+						yield f"data: {json.dumps({"type": "content_block_delta", "index": 0, "delta": delta})}\n\n"
 
 					# 累积实际生成的内容
 					if "text" in delta:
@@ -808,9 +833,13 @@ def Anthropic_Compatible():
 # 主入口
 if __name__ == "__main__":
 	log.info("---------------------------------------------------------------------")
-	log.info("Z.ai 2 API")
-	log.info("将 Z.ai 代理为 OpenAI Compatible 格式")
+	log.info("Z.ai 2 API https://github.com/hmjz100/Z.ai2api")
+	log.info("将 Z.ai 代理为 OpenAI/Anthropic Compatible 格式")
 	log.info("基于 https://github.com/kbykb/OpenAI-Compatible-API-Proxy-for-Z 重构")
+	log.info("---------------------------------------------------------------------")
+	log.info("Models         /v1/models")
+	log.info("OpenAI         /v1/chat/completions")
+	log.info("Anthropic      /v1/messages")
 	log.info("---------------------------------------------------------------------")
 	log.info("服务端口：%s", PORT)
 	log.info("备选模型：%s", MODEL)
