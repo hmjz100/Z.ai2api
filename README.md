@@ -4,12 +4,13 @@
 <div align=center>
 <img width="100" src="https://wsrv.nl/?url=https%3a%2f%2fz-cdn.chatglm.cn%2fz-ai%2fstatic%2flogo.svg&w=300&output=webp" />
 <h1>Z.ai2api</h1>
-<p>将 Z.ai 代理为 OpenAI Compatible 格式，支持免令牌、智能处理思考链、图片上传（登录后）等功能</p>
-<p>基于 https://github.com/kbykb/OpenAI-Compatible-API-Proxy-for-Z 使用 AI 辅助重构</p>
+<p>将 Z.ai 代理为 OpenAI/Anthropic Compatible 格式，支持免令牌、智能处理思考链、图片上传（登录后）等功能</p>
 </div>
 
 ## 功能
+- Anthropic Compatible 接口支持工具调用。
 - 支持根据官网 /api/models 生成模型列表，并自动选择合适的模型名称。
+- 支持模型 slug 映射。
 - （登录后）支持上传图片，使用 GLM 识图系列模型。
 - 支持智能识别思考链，完美转换多种格式。
 
@@ -59,3 +60,6 @@ cd Z.ai2api
 pip install -r requirements.txt
 python app.py
 ```
+
+## 致谢
+初始版本基于 https://github.com/kbykb/OpenAI-Compatible-API-Proxy-for-Z 使用 AI 辅助重构
