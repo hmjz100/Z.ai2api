@@ -1,3 +1,5 @@
+> [!IMPORTANT]
+> 正式版更新稍迟，如急需使用，建议切换到 canary 分支。
 <div align=center>
 <img width="100" src="https://wsrv.nl/?url=https%3a%2f%2fz-cdn.chatglm.cn%2fz-ai%2fstatic%2flogo.svg&w=300&output=webp" />
 <h1>Z.ai2api</h1>
