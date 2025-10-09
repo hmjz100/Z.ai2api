@@ -24,6 +24,11 @@
     | id: `deep-research`<br>name: `Z1-Rumination` | id: `z1-rumination`<br>name: `Z1-Rumination` |
     | id: `glm-4-flash`<br>name: `任务专用` | id: `glm-4-flash`<br>name: `GLM-4-Flash` |
     | id: `0808-360B-DR`<br>name: `0808-360B-DR` | id: `glm-0808-360b-dr`<br>name: `GLM-0808-360b-Dr` |
+  - 特别适配 Open WebUI（下述内容为默认设置，后续可在 OWB 中更改）
+    - 模型默认设为公开
+    - 模型 meta profile_image_url 设为 Z.ai 的 data: Logo
+    - 模型根据官网 hidden 设置 hidden 属性
+    - 模型根据官网 suggestion_prompts 添加 suggestion_prompts
 
 ## 要求
 ![Python 3.12+](https://img.shields.io/badge/3.12%2B-blue?style=for-the-badge&logo=python&label=python)
