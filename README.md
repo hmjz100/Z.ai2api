@@ -8,11 +8,22 @@
 </div>
 
 ## 功能
-- Anthropic Compatible 接口支持工具调用。
-- 支持根据官网 /api/models 生成模型列表，并自动选择合适的模型名称。
-- 支持模型 slug 映射。
-- （登录后）支持上传图片，使用 GLM 识图系列模型。
-- 支持智能识别思考链，完美转换多种格式。
+- OpenAI/Anthropic Compatible 接口
+  - 智能识别思考链，完美转换为多种格式
+  - 智能模型标识映射（`glm-4.6` -> `GLM-4-6-API-V1`）
+  - （登录后）支持上传图片，使用 GLM 识图系列模型
+- Anthropic Compatible 接口
+  - 智能识别工具块，转换为暂不完美的工具调用
+  - 工具调用
+- Models 接口
+  - 支持根据官网 /api/models 生成模型列表
+  - 智能选择或生成合适的模型信息返回，示例：
+    | 原始 | 结果 |
+    |------|------|
+    | id: `GLM-4-6-API-V1`<br>name: `GLM-4.6` | id: `glm-4.6`<br>name: `GLM-4.6` |
+    | id: `deep-research`<br>name: `Z1-Rumination` | id: `z1-rumination`<br>name: `Z1-Rumination` |
+    | id: `glm-4-flash`<br>name: `任务专用` | id: `glm-4-flash`<br>name: `GLM-4-Flash` |
+    | id: `0808-360B-DR`<br>name: `0808-360B-DR` | id: `glm-0808-360b-dr`<br>name: `GLM-0808-360b-Dr` |
 
 ## 要求
 ![Python 3.12+](https://img.shields.io/badge/3.12%2B-blue?style=for-the-badge&logo=python&label=python)
@@ -20,22 +31,23 @@
 
 ## 环境
 使用 `.env` 文件进行配置。
+
+### `PROTOCOL`
+  - 上游 API 基础协议
+  - 默认值：`https`
+
 ### `BASE`
   - 上游 API 基础域名
-  - 默认值：`https://chat.z.ai`
-### `PORT`
-  - 服务端口
-  - 默认值：`8080`
-### `MODEL`
-  - 备选模型，在未传入模型时调用
-  - 默认值：`GLM-4.5`
+  - 默认值：`chat.z.ai`
+
 ### `TOKEN`
-  - 访问令牌
+  - 提供给上游 API 的访问令牌
   - 如果启用了 `ANONYMOUS_MODE` 可不填
-### `ANONYMOUS_MODE`
-  - 访客模式，启用后将获取随机令牌
-  - 默认值：`true`
-  - 访客模式下不支持上传文件调用视觉模型
+
+### `PORT`
+  - 服务对外端口
+  - 默认值：`8080`
+
 ### `THINK_TAGS_MODE`
   - 思考链格式化模式
   - 默认值：`reasoning`
@@ -49,8 +61,22 @@
       - content: `> 嗯，用户……\n\n你好！`
     - "details"
       - content: `<details type="reasoning" open><div>\n\n嗯，用户……\n\n</div><summary>Thought for 1 seconds</summary></details>\n\n你好！`
-### `DEBUG_MODE`
-  - 显示调试信息，启用后将显示一些调试信息
+
+### `ANONYMOUS_MODE`
+  - 访客模式，启用后将获取随机令牌
+  - 默认值：`true`
+  - 访客模式下不支持上传文件调用视觉模型
+
+### `MODEL`
+  - 备选模型，在未传入模型时调用
+  - 默认值：`GLM-4.5`
+
+### `DEBUG`
+  - 启用调试模式，启用后将使用 Flash 自带的开发服务器运行，否则将使用 pywsgi 运行
+  - 默认值：`false`
+
+### `DEBUG_MSG`
+  - 显示调试信息，启用后将显示调试信息
   - 默认值：`false`
 
 ## 使用
@@ -61,5 +87,5 @@ pip install -r requirements.txt
 python app.py
 ```
 
-## 致谢
+## 说明
 初始版本基于 https://github.com/kbykb/OpenAI-Compatible-API-Proxy-for-Z 使用 AI 辅助重构
