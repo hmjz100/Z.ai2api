@@ -23,6 +23,7 @@ class cfg:
 	class api:
 		port = int(os.getenv("PORT", "8080"))
 		debug = str(os.getenv("DEBUG", "false")).lower() == "true"
+		debug_msg = str(os.getenv("DEBUG_MSG", "false")).lower() == "true"
 		think = str(os.getenv("THINK_TAGS_MODE", "reasoning"))
 		anon = str(os.getenv("ANONYMOUS_MODE", "true")).lower() == "true"
 	class model:
@@ -58,26 +59,10 @@ import tiktoken
 enc = tiktoken.get_encoding("cl100k_base")
 # 日志
 logging.basicConfig(
-	level=logging.DEBUG if cfg.api.debug else logging.INFO,
+	level=logging.DEBUG if cfg.api.debug_msg else logging.INFO,
 	format="%(asctime)s - %(levelname)s - %(message)s"
 )
 log = logging.getLogger(__name__)
-
-log.info("---------------------------------------------------------------------")
-log.info("Z.ai 2 API https://github.com/hmjz100/Z.ai2api")
-log.info("将 Z.ai 代理为 OpenAI/Anthropic Compatible 格式")
-log.info("基于 https://github.com/kbykb/OpenAI-Compatible-API-Proxy-for-Z 重构")
-log.info("---------------------------------------------------------------------")
-log.info(f"Base           {cfg.source.protocol}//{cfg.source.host}")
-log.info("Models         /v1/models")
-log.info("OpenAI         /v1/chat/completions")
-log.info("Anthropic      /v1/messages")
-log.info("---------------------------------------------------------------------")
-log.info("服务端口：%s", cfg.api.port)
-log.info("备选模型：%s", cfg.model.default)
-log.info("思考处理：%s", cfg.api.think)
-log.info("访客模式：%s", cfg.api.anon)
-log.info("显示调试：%s", cfg.api.debug)
 
 # Flask 应用
 app = Flask(__name__)
@@ -252,9 +237,15 @@ class utils:
 				"timestamp": signature_time
 			}
 
+		_models_cache = {}
 		@staticmethod
 		def models() -> Dict:
 			"""获取模型列表"""
+			current_token = utils.request.user().get('token') if cfg.api.anon else cfg.source.token
+
+			if utils.request._models_cache:
+				return utils.request._models_cache
+
 			def format_model_name(name: str) -> str:
 				"""格式化模型名"""
 				if not name:
@@ -303,7 +294,7 @@ class utils:
 
 			headers = {
 				**cfg.headers(),
-				"Authorization": f"Bearer {utils.request.user().get('token')}",
+				"Authorization": f"Bearer {current_token}",
 				"Content-Type": "application/json"
 			}
 			response = requests.get(f"{cfg.source.protocol}//{cfg.source.host}/api/models", headers=headers)
@@ -315,22 +306,42 @@ class utils:
 						continue
 					model_id = m.get("id")
 					model_name = m.get("name")
+					model_info = m.get("info", {})
+					model_meta = model_info.get("meta", {})
+					model_logo = "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2030%2030%22%20style%3D%22background%3A%232D2D2D%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M15.47%207.1l-1.3%201.85c-.2.29-.54.47-.9.47h-7.1V7.09c0%20.01%209.31.01%209.31.01z%22%2F%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M24.3%207.1L13.14%2022.91H5.7l11.16-15.81z%22%2F%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M14.53%2022.91l1.31-1.86c.2-.29.54-.47.9-.47h7.09v2.33h-9.3z%22%2F%3E%3C%2Fsvg%3E"
 
+					model_meta_r = {
+						"profile_image_url": model_logo,
+						"capabilities": model_meta.get("capabilities"),
+						"description": model_meta.get("description"),
+						"hidden": model_meta.get("hidden"),
+						"suggestion_prompts": [{"content": item["prompt"]} for item in (model_meta.get("suggestion_prompts") or []) if isinstance(item, dict) and "prompt" in item]
+					}
 					models.append({
 						"id": get_model_id(model_id, get_model_name(model_id, model_name)),
-						"slug": model_id,
 						"object": "model",
 						"name": get_model_name(model_id, model_name),
-						"nick": model_name,
-						"created": m.get("info", {}).get("created_at", int(datetime.now().timestamp())),
-						"capabilities": m.get("info", {}).get("meta", {}).get("capabilities", {}),
-						"owned_by": "z.ai"
+						"meta": model_meta_r,
+						"info": {
+							"meta": model_meta_r
+						},
+						"created": model_info.get("created_at", int(datetime.now().timestamp())),
+						"owned_by": "z.ai",
+						"orignal": {
+							"name": model_name,
+							"id": model_id,
+							"info": model_info
+						},
+						# Special For Open WebUI
+						# So, Fuck you! Private!
+						"access_control": None,
 					})
-				return {
+				result = {
 					"object": "list",
 					"data": models,
-					"original": data.get("data", [])
 				}
+				utils.request._models_cache = result
+				return result
 			else:
 				raise Exception(f"fetch models info fail: {response.text}")
 
@@ -527,9 +538,9 @@ class utils:
 
 			if models:
 				for _model in models.get("data", []):
-					if _model.get("id") == model or _model.get("slug") == model:
+					if _model.get("id") == model or _model.get("orignal", {}).get("id") == model:
 						# 检查该模型是否支持 thinking 能力
-						if not _model.get("capabilities", {}).get("think", False):
+						if not _model.get("orignal", {}).get("info", {}).get("meta", {}).get("capabilities", {}).get("think", False):
 							del result["features"]["enable_thinking"]
 							# 如果 features 为空，删除整个 features 字段
 							if not result["features"]:
@@ -1093,4 +1104,29 @@ def health():
 
 # 主入口
 if __name__ == "__main__":
-	app.run(host="0.0.0.0", port=cfg.api.port, threaded=True, debug=cfg.api.debug)
+	log.info("---------------------------------------------------------------------")
+	log.info("Z.ai 2 API https://github.com/hmjz100/Z.ai2api")
+	log.info("将 Z.ai 代理为 OpenAI/Anthropic Compatible 格式")
+	log.info("基于 https://github.com/kbykb/OpenAI-Compatible-API-Proxy-for-Z 重构")
+	log.info("---------------------------------------------------------------------")
+	log.info("请稍后，正在检查网络……")
+	models = utils.request.models()
+	log.info("---------------------------------------------------------------------")
+	log.info(f"Base           {cfg.source.protocol}//{cfg.source.host}")
+	log.info("Models         /v1/models")
+	log.info("OpenAI         /v1/chat/completions")
+	log.info("Anthropic      /v1/messages")
+	log.info("---------------------------------------------------------------------")
+	log.info("服务端口：%s", cfg.api.port)
+	log.info("可用模型：%s", ", ".join([item["id"] for item in models.get("data", []) if "id" in item]))
+	log.info("备选模型：%s", cfg.model.default)
+	log.info("思考处理：%s", cfg.api.think)
+	log.info("访客模式：%s", cfg.api.anon)
+	log.info("调试模式：%s", cfg.api.debug)
+	log.info("调试信息：%s", cfg.api.debug_msg)
+	
+	if cfg.api.debug:
+		app.run(host="0.0.0.0", port=cfg.api.port, threaded=True, debug=True)
+	else:
+		from gevent import pywsgi
+		pywsgi.WSGIServer(('0.0.0.0', cfg.api.port), app).serve_forever()
