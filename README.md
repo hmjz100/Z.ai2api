@@ -34,6 +34,14 @@
 ![Python 3.12+](https://img.shields.io/badge/3.12%2B-blue?style=for-the-badge&logo=python&label=python)
 ![.env](https://img.shields.io/badge/.env-%23555?style=for-the-badge&logo=.env)
 
+## 使用
+```
+git clone https://github.com/hmjz100/Z.ai2api.git
+cd Z.ai2api
+pip install -r requirements.txt
+python app.py
+```
+
 ## 环境
 使用 `.env` 文件进行配置。
 
@@ -83,14 +91,6 @@
 ### `DEBUG_MSG`
   - 显示调试信息，启用后将显示调试信息
   - 默认值：`false`
-
-## 使用
-```
-git clone https://github.com/hmjz100/Z.ai2api.git
-cd Z.ai2api
-pip install -r requirements.txt
-python app.py
-```
 
 ## 说明
 初始版本基于 https://github.com/kbykb/OpenAI-Compatible-API-Proxy-for-Z 使用 AI 辅助重构
