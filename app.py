@@ -119,6 +119,7 @@ class utils:
 				}, last_user_message)
 				headers["X-Signature"] = signatures.get("signature")
 				params["signature_timestamp"] = signatures.get("timestamp")
+				data["signature_prompt"] = last_user_message
 
 			log.debug("发送请求:")
 			log.debug("  headers: %s", json.dumps(headers))
@@ -212,29 +213,29 @@ class utils:
 				return hmac.new(key, msg, hashlib.sha256).hexdigest()
 
 			# content = content.strip()
-			signature_time = int(datetime.now().timestamp() * 1000)  # 当前时间戳（毫秒）
+			request_time = int(prarms.get("timestamp", datetime.now().timestamp() * 1000))  # 请求时间戳（毫秒）
 
 			# 第 1 级签名
-			signature_expire = signature_time // (5 * 60 * 1000)  # 5 分钟粒度
+			signature_expire = request_time // (5 * 60 * 1000)  # 5 分钟粒度
 			signature_1_plaintext = str(signature_expire)
 			signature_1 = _hmac_sha256(b"junjie", signature_1_plaintext.encode('utf-8'))
 
 			# 第 2 级签名
-			signature_start = str(signature_time)
+			content = base64.b64encode(content.encode('utf-8')).decode('ascii')
+
 			signature_prarms = str(','.join([f"{k},{prarms[k]}" for k in sorted(prarms.keys())]))
-			signature_2_plaintext = f"{signature_prarms}|{content}|{signature_start}"
+			signature_2_plaintext = f"{signature_prarms}|{content}|{str(request_time)}"
 			signature_2 = _hmac_sha256(signature_1.encode('utf-8'), signature_2_plaintext.encode('utf-8'))
 
 			# 感谢 junjie 圣开源
 			log.debug("生成签名: %s", signature_2)
-			log.debug("  签名时间: %s", signature_time)
-			log.debug("  请求标识: %s", prarms.get("requestId"))
 			log.debug("  请求时间: %s", prarms.get("timestamp"))
+			log.debug("  请求标识: %s", prarms.get("requestId"))
 			log.debug("  用户标识: %s", prarms.get("user_id"))
 			log.debug("  最后内容: %s", content[:50])
 			return {
 				"signature": signature_2,
-				"timestamp": signature_time
+				"timestamp": request_time
 			}
 
 		_models_cache = {}
