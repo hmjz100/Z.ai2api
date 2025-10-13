@@ -227,7 +227,32 @@ class utils:
 			signature_2_plaintext = f"{signature_prarms}|{content}|{str(request_time)}"
 			signature_2 = _hmac_sha256(signature_1.encode('utf-8'), signature_2_plaintext.encode('utf-8'))
 
-			# 感谢 junjie 圣开源
+			# 哎呀！哎呀！哎呀呀呀！
+			# 哎↘呀哎↘↗呀哎呀呀呀
+			# junjie，jun 总啊！
+			# 您怎么就改了签名算法啊哎呀！
+			# 哎呀哎呀哎呀呀呀呀呀
+			# 太感谢我 jun 总了呀呀呀呀
+			# 太性情 太感谢 太通透了
+			# 直接就宣判了啊！
+			# 这可是带 hmac 的签名算法
+			# 砸到小户身上脸都是疼的~
+			# 祝开发此签名的开发者
+			# 学业工作都顺利
+			# 用苹果手机
+			# 开苹果汽车
+			# 住苹果房子
+			# 享苹果人生
+			# 你必定是
+			# 开兰博基尼
+			# 坐私人飞机
+			# 同时也祝您和您的家里人
+			# 身体健康
+			# 事业顺利
+			# 家庭幸福
+			# 在以后的人生里
+			# 购买力越来越苹果爆赞👍
+
 			log.debug("生成签名: %s", signature_2)
 			log.debug("  请求时间: %s", prarms.get("timestamp"))
 			log.debug("  请求标识: %s", prarms.get("requestId"))
@@ -902,8 +927,6 @@ def Anthropic_Compatible():
 
 				# 流式解析
 				for raw_chunk in utils.response.parse(response):
-					log.debug("哈哈哈 %s", raw_chunk)
-
 					if raw_chunk.get("data", {}).get("done"):
 						break
 					delta = utils.response.format(raw_chunk, "Anthropic")
