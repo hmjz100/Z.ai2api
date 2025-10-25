@@ -30,26 +30,24 @@ class cfg:
 		default = str(os.getenv("MODEL", "glm-4.6"))
 		mapping = {}
 
-	@classmethod
-	def headers(cls) -> Dict[str, str]:
-		return {
-			"Accept": "*/*",
-			"Accept-Language": "zh-CN,zh;q=0.9",
-			"Cache-Control": "no-cache",
-			"Connection": "keep-alive",
-			"Origin": f"{cls.source.protocol}//{cls.source.host}",
-			"Pragma": "no-cache",
-			"Referer": f"{cls.source.protocol}//{cls.source.host}/",
-			"Sec-Ch-Ua": '"Microsoft Edge";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
-			"Sec-Ch-Ua-Mobile": "?0",
-			"Sec-Ch-Ua-Platform": '"Windows"',
-			"Sec-Fetch-Dest": "empty",
-			"Sec-Fetch-Mode": "cors",
-			"Sec-Fetch-Site": "same-origin",
-			"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0",
-			"X-FE-Version": "prod-fe-1.0.98",
-		}
+	headers = {
+		"Accept": "*/*",
+		"Accept-Language": "zh-CN",
+		"Cache-Control": "no-cache",
+		"Connection": "keep-alive",
+		"Pragma": "no-cache",
+		"Sec-Ch-Ua": '"Microsoft Edge";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
+		"Sec-Ch-Ua-Mobile": "?0",
+		"Sec-Ch-Ua-Platform": '"Windows"',
+		"Sec-Fetch-Dest": "empty",
+		"Sec-Fetch-Mode": "cors",
+		"Sec-Fetch-Site": "same-origin",
+		"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0",
+		"X-FE-Version": "prod-fe-1.0.111",
+	}
 
+cfg.headers["Origin"] = f"{cfg.source.protocol}//{cfg.source.host}"
+cfg.headers["Referer"] = f"{cfg.source.protocol}//{cfg.source.host}/"
 
 # tiktoken 预加载
 cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tiktoken') + os.sep
@@ -87,7 +85,7 @@ class utils:
 				"requestId": requestId,
 			}
 			headers = {
-				**cfg.headers(),
+				**cfg.headers,
 				"Authorization": f"Bearer {userToken}",
 				"Content-Type": "application/json",
 				"Referer": f"{cfg.source.protocol}//{cfg.source.host}/c/{chat_id}"
@@ -149,7 +147,7 @@ class utils:
 				"file": (filename, image_data, mime_type)
 			}
 			headers = {
-				**cfg.headers(),
+				**cfg.headers,
 				"Authorization": f"Bearer {utils.request.user().get("token")}",
 				"Referer": f"{cfg.source.protocol}//{cfg.source.host}/c/{chat_id}"
 			}
@@ -167,12 +165,45 @@ class utils:
 		def id(prefix = "msg") -> str:
 			# return f"{prefix}-{int(datetime.now().timestamp()*1e9)}"
 			return f"{str(uuid.uuid4())}"
+		
+		@staticmethod
+		def cookies():
+			"""获取并设置 Cookie"""
+			if cfg.headers.get("Cookie"):
+				return cfg.headers["Cookie"]
+
+			# 发起一个简单的 GET 请求以触发 Set-Cookie
+			url = f"{cfg.source.protocol}//{cfg.source.host}"
+			response = requests.get(url, headers=cfg.headers)
+
+			if response.status_code in (200, 301, 302, 401, 403):
+				# 提取 Set-Cookie 头（可能有多个）
+				set_cookie_headers = response.headers.get_all('Set-Cookie') if hasattr(response.headers, 'get_all') else response.headers.get('Set-Cookie')
+				if set_cookie_headers:
+					# 处理单个或多个 Set-Cookie
+					if isinstance(set_cookie_headers, str):
+						set_cookie_headers = [set_cookie_headers]
+
+					# 提取 cookie 名值对（简单处理，忽略属性如 Path、Secure 等）
+					cookies = []
+					for sc in set_cookie_headers:
+						# 取第一个分号前的部分（即 name=value）
+						cookie_part = sc.split(';')[0].strip()
+						if '=' in cookie_part:
+							cookies.append(cookie_part)
+
+					if cookies:
+						cfg.headers["Cookie"] = "; ".join(cookies)
+
+						return cfg.headers["Cookie"]
+			else:
+				raise Exception(f"fetch cookie fail: {response.status_code} - {response.text}")
 
 		_user_cache = {}
 		@staticmethod
 		def user():
 			headers = {
-				**cfg.headers(),
+				**cfg.headers,
 				"Content-Type": "application/json"
 			}
 			current_token = None if cfg.api.anon else cfg.source.token
@@ -218,7 +249,7 @@ class utils:
 			# 第 1 级签名
 			signature_expire = request_time // (5 * 60 * 1000)  # 5 分钟粒度
 			signature_1_plaintext = str(signature_expire)
-			signature_1 = _hmac_sha256(b"junjie", signature_1_plaintext.encode('utf-8'))
+			signature_1 = _hmac_sha256(b"key-@@@@)))()((9))-xxxx&&&%%%%%", signature_1_plaintext.encode('utf-8'))
 
 			# 第 2 级签名
 			content = base64.b64encode(content.encode('utf-8')).decode('ascii')
@@ -356,7 +387,7 @@ class utils:
 				return smart_id
 
 			headers = {
-				**cfg.headers(),
+				**cfg.headers,
 				"Authorization": f"Bearer {current_token}",
 				"Content-Type": "application/json"
 			}
@@ -769,7 +800,7 @@ def OpenAI_Compatible():
 		response = utils.request.chat(data, id)
 		if response.status_code != 200:
 			return utils.request.response(jsonify({
-				"error": response.status_code,
+				"error": f"{response.status_code}: {response.text}",
 				"message": response.text or None
 			})), response.status_code
 
@@ -924,7 +955,7 @@ def Anthropic_Compatible():
 		response = utils.request.chat(data, id)
 		if response.status_code != 200:
 			return utils.request.response(jsonify({
-				"error": response.status_code,
+				"error": f"{response.status_code}: {response.text}",
 				"message": response.text or None
 			})), response.status_code
 
@@ -1172,6 +1203,7 @@ if __name__ == "__main__":
 	log.info("---------------------------------------------------------------------")
 	log.info("请稍后，正在检查网络……")
 	models = utils.request.models()
+	cookies = utils.request.cookies()
 	log.info("---------------------------------------------------------------------")
 	log.info(f"Base           {cfg.source.protocol}//{cfg.source.host}")
 	log.info("Models         /v1/models")
@@ -1179,6 +1211,7 @@ if __name__ == "__main__":
 	log.info("Anthropic      /v1/messages")
 	log.info("---------------------------------------------------------------------")
 	log.info("服务端口：%s", cfg.api.port)
+	log.info("请求饼干：%s", cfg.headers["Cookie"]) if cookies else None
 	log.info("可用模型：%s", ", ".join([item["id"] for item in models.get("data", []) if "id" in item]))
 	log.info("备选模型：%s", cfg.model.default)
 	log.info("思考处理：%s", cfg.api.think)
